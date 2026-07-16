@@ -1,98 +1,147 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Mini Teleradiology Viewer - Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A high-performance, modular NestJS backend designed for processing, storing, and serving DICOM medical imaging studies. This project serves as a key component of the **Mini Teleradiology Viewer** platform, enabling study upload, metadata parsing, and API delivery for frontend display and rendering.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 Key Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+*   **Ingestion Pipeline (`POST /studies/upload`)**:
+    *   Accepts `.dcm` files via NestJS `FileInterceptor` + `multer`.
+    *   Saves the raw binary files locally (with scale-out designs outlined for S3).
+    *   Decoupled `DicomParserService` (using `dicom-parser`) to safely extract critical DICOM header tags without loading files entirely into memory.
+*   **Study Directory API (`GET /studies`)**:
+    *   Serves list of uploaded studies and extracted metadata for frontend grid displays.
+*   **Metadata Storage**:
+    *   Persists study metadata in PostgreSQL using **Prisma ORM**, keeping raw pixel data decoupled from the database.
+*   **Robust Test Suite**:
+    *   Unit and integration tests with mocked dependencies to maintain isolated, fast tests.
 
-## Project setup
+---
 
-```bash
-$ npm install
+## 🛠️ Technology Stack
+
+*   **Framework**: NestJS (TypeScript)
+*   **Database ORM**: Prisma (PostgreSQL)
+*   **DICOM Parsing**: `dicom-parser`
+*   **Testing**: Jest + `@nestjs/testing`
+
+---
+
+## 📐 System Architecture
+
+### Process Flow
+```mermaid
+sequenceDiagram
+    participant User as Frontend / Client
+    participant Controller as StudiesController
+    participant Service as StudiesService
+    participant Parser as DicomParserService
+    participant DB as PostgreSQL (Prisma)
+    participant Disk as Local Storage / S3
+
+    User->>Controller: POST /studies/upload (Multipart .dcm)
+    Controller->>Service: handleUpload(file)
+    Service->>Parser: extractMetadata(file.buffer)
+    Parser-->>Service: Return parsed header tags
+    Service->>Disk: Write raw binary file to disk
+    Service->>DB: Upsert study metadata
+    DB-->>Service: Confirm write
+    Service-->>Controller: Return created Study object
+    Controller-->>User: 201 Created (JSON metadata)
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## 🗄️ Database Schema
 
-# watch mode
-$ npm run start:dev
+We use Prisma to map out our schema in PostgreSQL. The metadata schema maps only clinical and metadata headers to database columns, avoiding binary bloat in the database.
 
-# production mode
-$ npm run start:prod
+```prisma
+model Study {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId        String    @db.VarChar(100)
+  patientName      String?   @db.VarChar(255)
+  studyInstanceUid String    @unique @db.VarChar(255) // Globally unique ID
+  modality         String    @db.VarChar(50)          // e.g., CT, MR, CR
+  studyDate        DateTime? @db.Date
+  fileUrl          String    @db.Text                 // Path to raw .dcm file
+  fileSize         Int                                // Storage metric in bytes
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+
+  @@index([patientId])
+  @@index([modality])
+  @@map("studies")
+}
 ```
 
-## Run tests
+---
 
+## 📦 Getting Started
+
+### 1. Prerequisites
+Ensure you have the following installed locally:
+*   [Node.js](https://nodejs.org/) (v18 or higher)
+*   [PostgreSQL](https://www.postgresql.org/) (running locally on port `5432` or via cloud instance)
+
+### 2. Project Setup
+Clone this repository and install dependencies:
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+### 3. Environment Configuration
+Create a `.env` file in the root directory:
+```env
+DATABASE_URL="postgresql://<username>:<password>@localhost:5432/dicom_lite?schema=public"
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 4. Database Migrations & Prisma Generation
+Generate the Prisma client and run migrations to align PostgreSQL:
+```bash
+# Generate type-safe Prisma client
+npx prisma generate
 
-## Resources
+# Apply migrations to database
+npx prisma migrate dev --name init_dicom_lite
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### 5. Running the Application
+```bash
+# Development (watch mode)
+npm run start:dev
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Production build & start
+npm run build
+npm run start:prod
+```
 
-## Support
+### 6. Running Tests
+The project features fast, isolated unit tests using Jest:
+```bash
+# Run unit tests
+npm run test
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# Run test coverage
+npm run test:cov
+```
 
-## Stay in touch
+---
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 🧠 Interview Talking Points & Deep Dives
 
-## License
+### 1. Why does DICOM bundle metadata and pixel data together?
+The DICOM format encapsulates both clinical metadata (patient name, ID, acquisition settings) and binary pixel data into a single file to ensure **clinical safety**. Bundling guarantees that patient identifiers and acquisition parameters are never dissociated from the diagnostic images themselves, preventing critical data mismatches during clinical workflows or viewer rendering.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### 2. Why is Window/Level (W/L) adjustment necessary?
+Medical imaging devices capture high-fidelity pixel data containing 12-bit to 16-bit values (representing 4096 to 65536 distinct gray levels, often expressed in Hounsfield Units for CT). Standard consumer monitors can only display 8-bit colors (256 gray levels). 
+Window/Leveling maps a custom subset of interest:
+*   **Window Width (W)**: The range of pixel values displayed (controls image contrast).
+*   **Window Level (L)**: The center value of the displayed range (controls image brightness).
+This mapping lets radiologists isolate specific anatomical details (e.g., bone vs. soft tissue windowing) within the display limits.
+
+### 3. How to scale this backend for 1000s of concurrent studies?
+*   **Lazy Loading & Pagination**: The backend implements study-level metadata indexing in PostgreSQL for rapid search, sort, and filtering. Image pixel data is only retrieved on-demand.
+*   **Decoupled Binary Storage**: Store raw `.dcm` files on scalable object storage (e.g., AWS S3 or Google Cloud Storage) behind a CDN (e.g., CloudFront) to relieve NestJS of serving heavy binary traffic.
+*   **Chunked & Streamed Delivery**: When serving multi-slice series, stream slices frame-by-frame instead of loading whole studies into memory.
+*   **WASM Metadata Extraction**: Offload file metadata parsing to WebAssembly (WASM) or optimized C++ worker processes to run heavy file parse jobs off Node.js's main thread loop.

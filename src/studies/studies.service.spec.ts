@@ -4,11 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DicomParserService } from './dicom-parser.service';
 
 jest.mock('../prisma/prisma.service', () => ({
-  PrismaService: class { },
+  PrismaService: class {},
 }));
 
 jest.mock('./dicom-parser.service', () => ({
-  DicomParserService: class { },
+  DicomParserService: class {},
 }));
 
 describe('StudiesService', () => {
