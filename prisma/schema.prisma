@@ -1,0 +1,27 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Study {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId        String   @db.VarChar(100)
+  patientName      String?  @db.VarChar(255)
+  studyInstanceUid String   @unique @db.VarChar(255) // The globally unique ID for this medical study
+  modality         String   @db.VarChar(50)          // e.g., CT, MR, CR
+  studyDate        DateTime? @db.Date
+  
+  fileUrl          String   @db.Text                 // Path to the raw .dcm file on disk/S3
+  fileSize         Int      // Storing size in bytes for infrastructure monitoring
+  
+  createdAt        DateTime @default(now()) @db.Timestamptz
+
+  @@index([patientId])
+  @@index([modality])
+  @@map("studies")
+}
