@@ -125,23 +125,3 @@ npm run test
 # Run test coverage
 npm run test:cov
 ```
-
----
-
-## 🧠 Interview Talking Points & Deep Dives
-
-### 1. Why does DICOM bundle metadata and pixel data together?
-The DICOM format encapsulates both clinical metadata (patient name, ID, acquisition settings) and binary pixel data into a single file to ensure **clinical safety**. Bundling guarantees that patient identifiers and acquisition parameters are never dissociated from the diagnostic images themselves, preventing critical data mismatches during clinical workflows or viewer rendering.
-
-### 2. Why is Window/Level (W/L) adjustment necessary?
-Medical imaging devices capture high-fidelity pixel data containing 12-bit to 16-bit values (representing 4096 to 65536 distinct gray levels, often expressed in Hounsfield Units for CT). Standard consumer monitors can only display 8-bit colors (256 gray levels). 
-Window/Leveling maps a custom subset of interest:
-*   **Window Width (W)**: The range of pixel values displayed (controls image contrast).
-*   **Window Level (L)**: The center value of the displayed range (controls image brightness).
-This mapping lets radiologists isolate specific anatomical details (e.g., bone vs. soft tissue windowing) within the display limits.
-
-### 3. How to scale this backend for 1000s of concurrent studies?
-*   **Lazy Loading & Pagination**: The backend implements study-level metadata indexing in PostgreSQL for rapid search, sort, and filtering. Image pixel data is only retrieved on-demand.
-*   **Decoupled Binary Storage**: Store raw `.dcm` files on scalable object storage (e.g., AWS S3 or Google Cloud Storage) behind a CDN (e.g., CloudFront) to relieve NestJS of serving heavy binary traffic.
-*   **Chunked & Streamed Delivery**: When serving multi-slice series, stream slices frame-by-frame instead of loading whole studies into memory.
-*   **WASM Metadata Extraction**: Offload file metadata parsing to WebAssembly (WASM) or optimized C++ worker processes to run heavy file parse jobs off Node.js's main thread loop.
